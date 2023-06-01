@@ -6,6 +6,7 @@ use crate::commands::GENERAL_GROUP;
 use crate::hooks::*;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use config::Config;
 use serenity::{
@@ -53,7 +54,7 @@ impl EventHandler for Handler {
 
 
 #[help]
-#[individual_command_tip = "Siemka!"]
+#[individual_command_tip = "Siemka! Po wiecej info o komendach, po prostu podaj komende po '!'"]
 #[command_not_found_text = "Could not find: `{}`."]
 
 async fn my_help(
@@ -101,8 +102,13 @@ async fn main() {
     let mut client = Client::builder(&config.token(), intents)
         .event_handler(Handler)
         .framework(framework)
+        .type_map_insert::<CommandCounter>(HashMap::default())
         .await
         .expect("Error creating client!");
+    {
+        let mut data = client.data.write().await;
+        data.insert::<commands::ShardManagerContainer>(Arc::clone(&client.shard_manager));
+    }
 
     if let Err(error) = client.start().await {
         println!("Client error: {}.", error);

@@ -6,7 +6,7 @@ use serenity::prelude::*;
 
 use crate::commands::*;
 
-struct CommandCounter;
+pub(crate) struct CommandCounter;
 
 impl TypeMapKey for CommandCounter {
     type Value = HashMap<String, u64>;

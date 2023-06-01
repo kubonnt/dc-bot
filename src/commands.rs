@@ -13,7 +13,7 @@ use serenity::{
 use serenity::client::bridge::gateway::{ShardManager, ShardId};
 use tokio::sync::Mutex;
 
-struct ShardManagerContainer;
+pub(crate) struct ShardManagerContainer;
 
 impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
@@ -43,7 +43,7 @@ async fn latency(ctx: &Context, msg: &Message) -> CommandResult {
     let shard_manager = match data.get::<ShardManagerContainer>() {
         Some(v) => v,
         None => {
-            msg.reply(ctx, "There was a problem getting the shard manager.").await?;
+            msg.reply(ctx, "There was a problem getting the shard manager. (Nie przejmuj się tym.)").await?;
 
             return Ok(());
         },
