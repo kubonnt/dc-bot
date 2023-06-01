@@ -1,10 +1,8 @@
 use std::collections::HashMap;
-use serenity::framework::standard::{CommandError, CommandResult, DispatchError};
+use serenity::framework::standard::{CommandError, DispatchError};
 use serenity::framework::standard::macros::hook;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
-
-use crate::commands::*;
 
 pub(crate) struct CommandCounter;
 

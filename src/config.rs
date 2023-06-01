@@ -4,7 +4,6 @@ use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use std::io::Write;
 use rspotify::Credentials;
-use dotenv::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
