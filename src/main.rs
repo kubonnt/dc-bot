@@ -1,6 +1,7 @@
 pub mod config;
 pub mod commands;
 pub mod hooks;
+pub mod utils;
 
 use crate::commands::*;
 use crate::hooks::*;
@@ -22,16 +23,8 @@ use serenity::{
 
 use serenity::http::Http;
 
-use rspotify::{
-    model::{AdditionalType, Country, Market},
-    prelude::*,
-    scopes, AuthCodeSpotify, Credentials, OAuth,
-};
 use serenity::model::id::{ChannelId, GuildId};
 use serenity::model::prelude::Activity;
-
-const SIMPLE_RESPONSE: &str = "Przepraszam, mój panie.";
-const SIMPLE_COMMAND: &str = "!przepros";
 
 struct Handler {
     is_loop_running: AtomicBool,
@@ -61,14 +54,6 @@ impl EventHandler for Handler {
             });
 
             self.is_loop_running.swap(true, Ordering::Relaxed);
-        }
-    }
-
-    async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == SIMPLE_COMMAND {
-            if let Err(error) = msg.channel_id.say(&ctx.http, SIMPLE_RESPONSE).await {
-                println!("Error sending the message: {}", error);
-            }
         }
     }
 
@@ -111,6 +96,7 @@ async fn set_status_to_current_time(ctx: Arc<Context>) {
 
 #[tokio::main]
 async fn main() {
+    // Discord bot init
     let _ = Config::new().save();
     let config = Config::load().unwrap();
 
@@ -152,7 +138,9 @@ async fn main() {
     let intents = GatewayIntents::default()
         | GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
-        | GatewayIntents::DIRECT_MESSAGES;
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::GUILD_VOICE_STATES;
 
     let mut client = Client::builder(&config.token(), intents)
         .event_handler(Handler {

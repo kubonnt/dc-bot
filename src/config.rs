@@ -3,7 +3,6 @@ use ron::{ser, de};
 use ron::ser::PrettyConfig;
 use serde::{Serialize, Deserialize};
 use std::io::Write;
-use rspotify::Credentials;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
