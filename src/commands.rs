@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::fmt::Write;
-use std::fmt::format;
 use std::path;
 use std::sync::Arc;
 use regex::Regex;
@@ -17,21 +16,15 @@ use serenity::{
 
 use serenity::client::bridge::gateway::{ShardManager, ShardId};
 use serenity::framework::standard::{Args, CommandGroup, CommandOptions, help_commands, HelpOptions, Reason};
-use serenity::futures::future::err;
-use serenity::model::application::command::CommandOption;
 use serenity::model::id::UserId;
 use serenity::model::{Permissions, Timestamp};
-use serenity::model::channel::AttachmentType;
 use serenity::model::channel::AttachmentType::Path;
-use songbird::input::cached::LengthHint::Time;
 use tokio::sync::Mutex;
 
 use crate::hooks::CommandCounter;
 use crate::utils::to_time;
 
-use songbird::driver::Driver;
 use songbird::input::Restartable;
-use songbird::tracks::{Queued, TrackQueue};
 use tokio::process::Command;
 use tracing::{error, info};
 

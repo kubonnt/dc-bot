@@ -15,7 +15,7 @@ use std::time::Duration;
 use config::Config;
 use serenity::{
     async_trait,
-    model::{channel::Message, gateway::Ready},
+    model::gateway::Ready,
     prelude::*,
     client::{Client, Context, EventHandler},
     framework::standard::StandardFramework,
