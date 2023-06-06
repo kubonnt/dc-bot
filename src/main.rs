@@ -25,6 +25,7 @@ use serenity::http::Http;
 
 use serenity::model::id::{ChannelId, GuildId};
 use serenity::model::prelude::Activity;
+use songbird::SerenityInit;
 
 struct Handler {
     is_loop_running: AtomicBool,
@@ -135,10 +136,8 @@ async fn main() {
         .help(&MY_HELP)
         .bucket("complicated", |b| b.delay(5)).await;
 
-    let intents = GatewayIntents::default()
-        | GatewayIntents::GUILD_MESSAGES
+    let intents = GatewayIntents::non_privileged()
         | GatewayIntents::MESSAGE_CONTENT
-        | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::GUILD_VOICE_STATES;
 
@@ -147,6 +146,7 @@ async fn main() {
             is_loop_running: AtomicBool::new(false),
         })
         .framework(framework)
+        .register_songbird()
         .type_map_insert::<CommandCounter>(HashMap::default())
         .await
         .expect("Error creating client!");

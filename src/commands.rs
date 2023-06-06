@@ -16,6 +16,7 @@ use serenity::{
 
 use serenity::client::bridge::gateway::{ShardManager, ShardId};
 use serenity::framework::standard::{Args, CommandGroup, CommandOptions, help_commands, HelpOptions, Reason};
+use serenity::http::CacheHttp;
 use serenity::model::id::UserId;
 use serenity::model::{Permissions, Timestamp};
 use serenity::model::channel::AttachmentType::Path;
@@ -331,10 +332,11 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 }).await?;
             }
         } else {
+            println!("I'm here!, url: {}", url);
             let source = match Restartable::ytdl(url, true).await {
                 Ok(source) => source,
                 Err(why) => {
-                    error!("Error starting: {:?}", why);
+                    println!("Error starting: {:?}", why);
 
                     msg.channel_id.send_message(&ctx.http, |m| {
                         m.embed(|e| {
