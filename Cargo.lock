@@ -270,10 +270,8 @@ dependencies = [
 name = "dcbot"
 version = "0.1.0"
 dependencies = [
- "audiopus_sys",
  "chrono",
  "dotenv",
- "regex",
  "ron",
  "serde",
  "serenity",

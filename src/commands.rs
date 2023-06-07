@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use std::path;
 use std::sync::Arc;
-use regex::Regex;
 
 use serenity::{
     model::{channel::Message},
@@ -45,7 +44,7 @@ impl TypeMapKey for ShardManagerContainer {
 struct Owner;
 
 #[group]
-#[commands(ping, latency, commands, about_role, about, am_i_admin, jd, przepros, join, play)]
+#[commands(ping, latency, commands, about_role, about, am_i_admin, jd, przepros, join, play, leave)]
 #[summary = "Commands for server members."]
 struct General;
 
@@ -234,8 +233,6 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         return Ok(());
     }
 
-    //let search = args.clone();
-
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
 
@@ -338,6 +335,47 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
                         .timestamp(Timestamp::now())
                 })
             }).await?;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild = msg.guild(&ctx.cache).unwrap();
+    let guild_id = guild.id;
+
+    let manager = songbird::get(ctx).await
+        .expect("Songbird voice client placed in at init.");
+    let has_handler = manager.get(guild_id).is_some();
+
+    if has_handler {
+        if let Err(error) = manager.remove(guild_id).await {
+            msg.channel_id.send_message(&ctx.http, |m| {
+                m.embed(|e| {
+                    e.colour(0xf38ba8)
+                        .title(format!(":warning: Error leaving channel {:?}.", error))
+                        .description("Contact admin.")
+                        .timestamp(Timestamp::now())
+                })
+            }).await?;
+        }
+
+        msg.channel_id.send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                e.colour(0xf38ba8)
+                    .title("Left voice channel.")
+                    .timestamp(Timestamp::now())
+            })
+        }).await?;
+    } else {
+        msg.channel_id.send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                e.colour(0xf38ba8)
+                    .title(":warning: Not in the voice channel.")
+                    .timestamp(Timestamp::now())
+            })
+        }).await?;
     }
 
     Ok(())

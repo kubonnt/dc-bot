@@ -16,5 +16,3 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 songbird = { version = "0.3.2", features = ["yt-dlp", "builtin-queue", "serenity"] }
 dotenv = "0.15.0"
-audiopus_sys = "0.2.2"
-regex = "1.8.3"
