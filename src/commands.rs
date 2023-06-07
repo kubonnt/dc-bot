@@ -20,6 +20,7 @@ use serenity::http::CacheHttp;
 use serenity::model::id::UserId;
 use serenity::model::{Permissions, Timestamp};
 use serenity::model::channel::AttachmentType::Path;
+use songbird::input::cached::LengthHint::Time;
 use tokio::sync::Mutex;
 
 use crate::hooks::CommandCounter;
@@ -220,7 +221,20 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             return Ok(());
         }
     };
-    let search = args.clone();
+
+    if !url.starts_with("http") {
+        msg.channel_id.send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                e.colour(0xf38ba8)
+                    .title(":warning: Provide a valid URL.")
+                    .timestamp(Timestamp::now())
+            })
+        }).await?;
+
+        return Ok(());
+    }
+
+    //let search = args.clone();
 
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
@@ -232,155 +246,38 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
-        if !url.starts_with("http") {
-            let source = match songbird::input::ytdl_search(search.message()).await {
-                Ok(source) => source,
-                Err(why) => {
-                  println!("Error starting source: {:?}", why);
-
-                    msg.channel_id.send_message(&ctx.http, |m| {
-                        m.embed(|e| {
-                            e.colour(0xf38ba8)
-                                .title(":warning: Error adding song to playlist.")
-                                .description("Probably one of the songs in the playlist isn't available.")
-                                .timestamp(Timestamp::now())
-                        })
-                    }).await?;
-                    return Ok(());
-                },
-            };
-
-            let song = handler.enqueue_source(source.into());
-            let mut i = 0;
-            for queued_song in handler.queue().current_queue() {
-                i += queued_song.metadata().duration.unwrap().as_secs();
-            }
-
-            let playtime = to_time(i);
-            let metadata = song.metadata();
-
-            msg.channel_id.send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.colour(0xa6e3a1)
-                        .title(":notes: Found song!")
-                        .description(format!(
-                            "{} - {}",
-                            metadata.title.clone().unwrap(),
-                            metadata.artist.clone().unwrap()
-                        ))
-                        .fields(vec![
-                            ("Songs queued", format!("{}", handler.queue().len()), true),
-                            ("Total playtime", playtime, true)
-                        ])
-                        .timestamp(Timestamp::now())
-                })
-            }).await?;
-
-        } else if url.contains("playlist") {
-            let get_raw_list = Command::new("yt-dlp")
-                .args(&["-j", "--flat-playlist", &url])
-                .output()
-                .await;
-
-            let raw_list = match get_raw_list {
-                Ok(list) => String::from_utf8(list.stdout).unwrap(),
-                Err(_) => String::from("Error!"),
-            };
-
-            let re = Regex::new(r#""url": "(https://www.youtube.com/watch\?v=[A-Za-z0-9]{11})""#).unwrap();
-            let urls: Vec<String> = re.captures_iter(&raw_list)
-                .map(|cap| cap[1].to_string())
-                .collect();
-
-            for url in urls {
-                info!("Queueing --> {}", url);
-                let source = match Restartable::ytdl(url, true).await {
-                    Ok(source) => source,
-                    Err(why) => {
-                        error!("Error starting: {:?}", why);
-
-                        msg.channel_id.send_message(&ctx.http, |m| {
-                            m.embed(|e| {
-                                e.colour(0xf38ba8)
-                                    .title(":warning: Error adding song to the playlist.")
-                                    .description("This could mean that the song is unavailable.")
-                                    .timestamp(Timestamp::now())
-                            })
-                        }).await?;
-                        return Ok(());
-                    }
-                };
-
-                let _song = handler.enqueue_source(source.into());
-                let mut i = 0;
-                for queued_song in handler.queue().current_queue() {
-                    i += queued_song.metadata().duration.unwrap().as_secs();
-                }
-
-                let playtime = to_time(i);
+        let source = match songbird::ytdl(&url).await {
+            Ok(source) => source,
+            Err(why) => {
+                println!("Error starting source: {:?}", why);
 
                 msg.channel_id.send_message(&ctx.http, |m| {
                     m.embed(|e| {
-                        e.colour(0xa6e3a1)
-                            .title(":notes: Added playlist!")
-                            .fields(vec![
-                                ("Songs queued", format!("{}", handler.queue().len()), true),
-                                ("Total playtime", playtime, true)
-                            ])
+                        e.colour(0xf38ba8)
+                            .title(":warning: Error sourcing ffmpeg.")
                             .timestamp(Timestamp::now())
                     })
                 }).await?;
-            }
-        } else {
-            println!("I'm here!, url: {}", url);
-            let source = match Restartable::ytdl(url, true).await {
-                Ok(source) => source,
-                Err(why) => {
-                    println!("Error starting: {:?}", why);
 
-                    msg.channel_id.send_message(&ctx.http, |m| {
-                        m.embed(|e| {
-                            e.colour(0xf38ba8)
-                                .title(":warning: Error adding song to the playlist.")
-                                .description("This could mean that the song is unavailable.")
-                                .timestamp(Timestamp::now())
-                        })
-                    }).await?;
-                    return Ok(());
-                }
-            };
+                return Ok(())
+            },
+        };
 
-            let song = handler.enqueue_source(source.into());
-            let mut i = 0;
-            for queued_song in handler.queue().current_queue() {
-                i += queued_song.metadata().duration.unwrap().as_secs();
-            }
+        handler.play_source(source);
 
-            let playtime = to_time(i);
-            let metadata = song.metadata();
+        msg.channel_id.send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                e.colour(0xf38ba8)
+                    .title("Playing song!")
+                    .timestamp(Timestamp::now())
+            })
+        }).await?;
 
-            msg.channel_id.send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.colour(0xa6e3a1)
-                        .title(":notes: Found song!")
-                        .description(format!(
-                            "{} - {}",
-                            metadata.title.clone().unwrap(),
-                            metadata.artist.clone().unwrap()
-                        ))
-                        .fields(vec![
-                            ("Songs queued", format!("{}", handler.queue().len()), true),
-                            ("Total playtime", playtime, true)
-                        ])
-                        .timestamp(Timestamp::now())
-                })
-            }).await?;
-        }
     } else {
         msg.channel_id.send_message(&ctx.http, |m| {
             m.embed(|e| {
                 e.colour(0xf38ba8)
-                    .title(":warning: Not in the voice channel.")
+                    .title("Not in a voice channel to play.")
                     .timestamp(Timestamp::now())
             })
         }).await?;
