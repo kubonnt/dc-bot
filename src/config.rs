@@ -14,7 +14,8 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Self {
-        let tkn = env::var("DISCORD_TOKEN").unwrap();
+        dotenv::dotenv().expect("Failed to load .env file.");
+        let tkn = env::var("TOKEN").unwrap();
       return Config {
           token: tkn,
           prefix: String::from("!"),
