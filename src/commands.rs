@@ -243,7 +243,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
-        let source = match songbird::ytdl(&url).await {
+        let source = match songbird::ffmpeg(&url).await {
             Ok(source) => source,
             Err(why) => {
                 println!("Error starting source: {:?}", why);
