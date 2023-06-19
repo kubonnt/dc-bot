@@ -27,7 +27,6 @@ use crate::utils::to_time;
 
 use songbird::input::Restartable;
 use tokio::process::Command;
-use tracing::{error, info};
 
 //pub mod utils;
 
@@ -259,6 +258,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 return Ok(())
             },
         };
+
         println!("{:?}", source);
         handler.play_source(source);
 
@@ -379,5 +379,10 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     Ok(())
+}
+
+#[command]
+async fn use_spotify(ctx: &Context, msg: &Message) -> CommandResult {
+    !unimplemented!()
 }
 

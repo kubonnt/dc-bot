@@ -26,6 +26,11 @@ use serenity::http::Http;
 use serenity::model::id::{ChannelId, GuildId};
 use serenity::model::prelude::Activity;
 use songbird::SerenityInit;
+use rspotify::{
+    model::{AdditionalType, Country, Market, AlbumId},
+    prelude::*,
+    scopes, Credentials, OAuth, ClientCredsSpotify
+};
 
 struct Handler {
     is_loop_running: AtomicBool,
@@ -100,6 +105,22 @@ async fn main() {
     // Discord bot init
     let _ = Config::new().save();
     let config = Config::load().unwrap();
+
+    {
+        let creds = Credentials {
+            id: config.spotify_client_id().to_string(),
+            secret: Some(config.spotify_client_secret().to_string()),
+        };
+
+        let spotify = ClientCredsSpotify::new(creds);
+
+        spotify.request_token().await.unwrap();
+
+        let birdy_uri = AlbumId::from_uri("spotify:album:0sNOF9WDwhWunNAHPD3Baj").unwrap();
+        let albums = spotify.album(birdy_uri).await;
+
+        println!("Response: {albums:#?}");
+    }
 
     let http = Http::new(&config.token());
 

@@ -8,19 +8,25 @@ use std::io::Write;
 pub struct Config {
     token: String,
     prefix: String,
-    // client_id: String,
-    // client_st: String,
+    spotify_client_id: String,
+    spotify_client_secret: String,
+    spotify_redirect_uri: String,
 }
 
 impl Config {
     pub fn new() -> Self {
         dotenv::dotenv().expect("Failed to load .env file.");
-        let tkn = env::var("TOKEN").unwrap();
+        let dc_token = env::var("TOKEN").unwrap();
+        let client_id = env::var("CLIENT_ID").unwrap();
+        let client_secret = env::var("CLIENT_SECRET").unwrap();
+        let redirect_uri = env::var("SPOTIFY_REDIRECT_URI").unwrap();
+
       return Config {
-          token: tkn,
+          token: dc_token,
           prefix: String::from("!"),
-          // client_id: env::var("CLIENT_ID").unwrap(),
-          // client_st: env::var("CLIENT_ST").unwrap(),
+          spotify_client_id: client_id,
+          spotify_client_secret: client_secret,
+          spotify_redirect_uri: redirect_uri,
       }
     }
 
@@ -61,7 +67,9 @@ impl Config {
 
     pub fn prefix(&self) -> &String { return &self.prefix; }
 
-    // pub fn client_id(&self) -> &String { return &self.client_id; }
-    //
-    // pub fn client_st(&self) -> &String { return &self.client_st; }
+    pub fn spotify_client_id(&self) -> &String { return &self.spotify_client_id; }
+
+    pub fn spotify_client_secret(&self) -> &String { return &self.spotify_client_secret; }
+
+    pub fn spotify_redirect_uri(&self) -> &String { return &self.spotify_redirect_uri; }
 }
