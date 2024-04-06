@@ -7,12 +7,14 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.17.0", features = ["full"] }
-serenity = "0.11.5"
+serenity = "0.12.1"
 ron = "0.8.0"
 serde = "1.0.163"
 chrono = "0.4.26"
 sys-info = "0.9.1"
-songbird = { version = "0.3.2", features = ["yt-dlp", "builtin-queue", "serenity"] }
 dotenv = "0.15.0"
 rspotify = "0.11.7"
 env_logger = "0.10.0"
+songbird = {version = "0.4.1", features = ["builtin-queue", "serenity"]}
+reqwest = "0.11.27"
+symphonia = { version = "0.5.2", features = ['pcm','mp3','wav','isomp4','aac','alac'] }

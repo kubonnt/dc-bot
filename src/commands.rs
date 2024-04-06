@@ -1,39 +1,56 @@
 use std::collections::HashSet;
 use std::fmt::Write;
 use std::path;
-use std::sync::Arc;
 
-use serenity::{
-    model::{channel::Message},
-    prelude::*,
-    client::{Context},
-    framework::standard::{
-        macros::{command, group, help, check},
-        CommandResult,
-    },
-};
-
-use serenity::client::bridge::gateway::{ShardManager, ShardId};
+use serenity::{model::{channel::Message}, prelude::*, client::{Context}, framework::standard::{
+    macros::{command, group, help, check},
+    CommandResult,
+}, async_trait};
+use songbird::events::{Event, EventHandler as VoiceEventHandler};
+use serenity::model::gateway::Ready;
 use serenity::framework::standard::{Args, CommandGroup, CommandOptions, help_commands, HelpOptions, Reason};
 use serenity::http::CacheHttp;
 use serenity::model::id::UserId;
-use serenity::model::{Permissions, Timestamp};
-use serenity::model::channel::AttachmentType::Path;
-use songbird::input::cached::LengthHint::Time;
-use tokio::sync::Mutex;
+use serenity::model::{Permissions};
+use songbird::input::YoutubeDl;
+use path::Path;
 
 use crate::hooks::CommandCounter;
-use crate::utils::to_time;
 
-use songbird::input::Restartable;
-use tokio::process::Command;
+use reqwest::Client;
+use serenity::all::{Builder, MessageBuilder};
+use songbird::{EventContext, TrackEvent};
+use tokio::signal::windows::ctrl_break;
 
-//pub mod utils;
+pub(crate) struct HttpKey;
 
-pub(crate) struct ShardManagerContainer;
+impl TypeMapKey for HttpKey {
+    type Value = Client;
+}
 
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
+pub(crate) struct Handler;
+#[async_trait]
+impl EventHandler for Handler {
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
+    }
+}
+
+pub(crate) struct TrackErrorNotifier;
+#[async_trait]
+impl VoiceEventHandler for TrackErrorNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(track_list) = ctx {
+            for (state, handle) in *track_list {
+                println!(
+                    "Track {:?} encountered an error: {:?}",
+                    handle.uuid(),
+                    state.playing
+                );
+            }
+        }
+        None
+    }
 }
 
 #[group]
@@ -42,9 +59,12 @@ impl TypeMapKey for ShardManagerContainer {
 #[commands(create_channel)]
 struct Owner;
 
+// #[group]
+// #[commands(ping, latency, commands, about_role, about, am_i_admin, jd, przepros, join, play, leave)]
+// struct General;
+
 #[group]
-#[commands(ping, latency, commands, about_role, about, am_i_admin, jd, przepros, join, play, leave)]
-#[summary = "Commands for server members."]
+#[commands(join, leave, play, stop)]
 struct General;
 
 #[help]
@@ -95,29 +115,6 @@ async fn owner_check(
 }
 
 #[command]
-#[allowed_roles("Sugar Daddy", "Pachołek")]
-async fn about_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let potential_role_name = args.rest();
-
-    if let Some(guild) = msg.guild(&ctx.cache) {
-        if let Some(role) = guild.role_by_name(potential_role_name) {
-            if let Err(why) = msg.channel_id
-                .say(&ctx.http, &format!("Role-ID {}", role.id)).await {
-                println!("Error sending  message {:?}", why);
-            }
-
-            return Ok(());
-        }
-    }
-
-    msg.channel_id
-        .say(&ctx.http, format!("Could not find role named: {:?}", potential_role_name))
-        .await?;
-
-    Ok(())
-}
-
-#[command]
 async fn about(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id.say(&ctx.http, "Alfred. Poproś o co chesz, paniczu.").await?;
 
@@ -151,16 +148,16 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     return Ok(());
 }
 
-#[command]
-async fn jd(ctx: &Context, msg: &Message) -> CommandResult {
-    if let Err(error) = msg.channel_id.send_message(&ctx.http, |m| {
-        m.content("JD!").add_file(Path(path::Path::new("media/dis.png")))
-    }).await {
-        println!("Error sending message: {:?}.", error);
-    }
-
-    Ok(())
-}
+// #[command]
+// async fn jd(ctx: &Context, msg: &Message) -> CommandResult {
+//     if let Err(error) = msg.channel_id.send_message(&ctx.http, |m: MessageBuilder| {
+//         m.("JD!").add_file(Path::new("media/dis.png"))
+//     }).await {
+//         println!("Error sending message: {:?}.", error);
+//     }
+//
+//     Ok(())
+// }
 
 #[command]
 async fn create_channel(ctx: &Context, msg: &Message) -> CommandResult {
@@ -168,34 +165,34 @@ async fn create_channel(ctx: &Context, msg: &Message) -> CommandResult {
     !unimplemented!()
 }
 
-#[command]
-async fn latency(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = ctx.data.read().await;
-    let shard_manager = match data.get::<ShardManagerContainer>() {
-        Some(v) => v,
-        None => {
-            msg.reply(ctx, "There was a problem getting the shard manager. (Nie przejmuj się tym.)").await?;
-
-            return Ok(());
-        },
-    };
-
-    let manger = shard_manager.lock().await;
-    let runners = manger.runners.lock().await;
-
-    let runner = match runners.get(&ShardId(ctx.shard_id)) {
-        Some(runner) => runner,
-        None => {
-            msg.reply(ctx, "No shard found.").await?;
-
-            return Ok(());
-        },
-    };
-
-    msg.reply(ctx, &format!("The shard latency is {:?}", runner.latency)).await?;
-
-    Ok(())
-}
+// #[command]
+// async fn latency(ctx: &Context, msg: &Message) -> CommandResult {
+//     let data = ctx.data.read().await;
+//     let shard_manager = match data.get::<ShardManagerContainer>() {
+//         Some(v) => v,
+//         None => {
+//             msg.reply(ctx, "There was a problem getting the shard manager. (Nie przejmuj się tym.)").await?;
+//
+//             return Ok(());
+//         },
+//     };
+//
+//     let manger = shard_manager.lock().await;
+//     let runners = manger.runners.lock().await;
+//
+//     let runner = match runners.get(&ShardId(ctx.shard_id)) {
+//         Some(runner) => runner,
+//         None => {
+//             msg.reply(ctx, "No shard found.").await?;
+//
+//             return Ok(());
+//         },
+//     };
+//
+//     msg.reply(ctx, &format!("The shard latency is {:?}", runner.latency)).await?;
+//
+//     Ok(())
+// }
 
 #[command]
 async fn przepros(ctx:  &Context, msg: &Message) -> CommandResult {
@@ -209,31 +206,21 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let url = match args.single::<String>() {
         Ok(url) => url,
         Err(_) => {
-            msg.channel_id.send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.colour(0xf38ba8)
-                        .title(":warning: Use command like this: play <url>")
-                        .timestamp(Timestamp::now())
-                })
-            }).await?;
+            msg.channel_id.say(&ctx.http, ":warning: Use command like this: play <url>");
             return Ok(());
         }
     };
 
-    if !url.starts_with("http") {
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.colour(0xf38ba8)
-                    .title(":warning: Provide a valid URL.")
-                    .timestamp(Timestamp::now())
-            })
-        }).await?;
+    let do_search = !url.starts_with("http");
 
-        return Ok(());
-    }
+    let guild_id = msg.guild_id.unwrap();
 
-    let guild = msg.guild(&ctx.cache).unwrap();
-    let guild_id = guild.id;
+    let http_client = {
+        let data = ctx.data.read().await;
+        data.get::<HttpKey>()
+            .cloned()
+            .expect("Guaranteed to exist in the typemap.")
+    };
 
     let manager = songbird::get(ctx).await
         .expect("Songbird Voice client placed in at init.")
@@ -242,42 +229,38 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
-        let source = match songbird::ytdl(&url).await {
-            Ok(source) => source,
-            Err(why) => {
-                println!("Error starting source: {:?}", why);
-
-                msg.channel_id.send_message(&ctx.http, |m| {
-                    m.embed(|e| {
-                        e.colour(0xf38ba8)
-                            .title(":warning: Error sourcing ffmpeg.")
-                            .timestamp(Timestamp::now())
-                    })
-                }).await?;
-
-                return Ok(())
-            },
+        let mut source = if do_search {
+            YoutubeDl::new_search(http_client, url)
+        } else {
+            YoutubeDl::new(http_client, url)
         };
-
-        println!("{:?}", source);
-        handler.play_source(source);
-
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.colour(0xf38ba8)
-                    .title("Playing song!")
-                    .timestamp(Timestamp::now())
-            })
-        }).await?;
-
+        handler.stop();
+        let _ = handler.play_input(source.clone().into());
     } else {
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.colour(0xf38ba8)
-                    .title("Not in a voice channel to play.")
-                    .timestamp(Timestamp::now())
-            })
-        }).await?;
+        msg.channel_id.say(&ctx.http, ":warning: Error sourcing ffmpeg.").await;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    let guild_id = msg.guild_id.unwrap();
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let mut handler = handler_lock.lock().await;
+        //let queue = handler.queue();
+        handler.stop();
+        //queue.stop();
+
+        msg.channel_id.say(&ctx.http, "Queue cleared.").await;
+    } else {
+        msg.channel_id.say(&ctx.http, "Not in voice channel.").await;
     }
 
     Ok(())
@@ -285,27 +268,22 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 #[command]
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    println!("{:?}\n{:?}", msg, _args);
+    // println!("{:?}\n{:?}", msg, _args);
 
-    let guild = msg.guild(&ctx.cache).unwrap();
-    let guild_id = guild.id;
+    let (guild_id, channel_id) = {
+        let guild = msg.guild(&ctx.cache).unwrap();
+        let channel_id = guild
+            .voice_states
+            .get(&msg.author.id)
+            .and_then(|voice_state| voice_state.channel_id);
 
-    //let debug_channel_id: i64 = 1107375027952828507;
-    let channel_id = guild
-        .voice_states
-        .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id);
+        (guild.id, channel_id)
+    };
 
     let connect_to = match channel_id {
         Some(channel) => channel,
         None => {
-            msg.channel_id.send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.colour(0xf38ba8)
-                        .title(":warning: Join a voice channel first!")
-                        .timestamp(Timestamp::now())
-                })
-            }).await?;
+            msg.channel_id.say(&ctx.http, ":warning: Join a voice channel first!");
 
             return Ok(());
         }
@@ -316,25 +294,12 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .expect("Songbird voice client init.")
         .clone();
 
-    let(_, success) = manager.join(guild_id, connect_to).await;
-
-    if let Ok(_channel) = success {
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.colour(0xa6e3a1)
-                    .title(format!("Joined channel --> {}", connect_to.mention()))
-                    .timestamp(Timestamp::now())
-            })
-        }).await?;
+    if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
+        let mut handler = handler_lock.lock().await;
+        handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
     } else {
-        msg.channel_id.send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.colour(0xf38ba8)
-                        .title(":warning: Error joining channel.")
-                        .description("Please ensure I have the correct permissions.")
-                        .timestamp(Timestamp::now())
-                })
-            }).await?;
+        msg.channel_id.say(&ctx.http, ":warning: Error joining channel. \
+        Please ensure I have the correct permissions.").await;
     }
 
     Ok(())
@@ -342,8 +307,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).unwrap();
-    let guild_id = guild.id;
+    let guild_id = msg.guild_id.unwrap();
 
     let manager = songbird::get(ctx).await
         .expect("Songbird voice client placed in at init.");
@@ -351,38 +315,17 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 
     if has_handler {
         if let Err(error) = manager.remove(guild_id).await {
-            msg.channel_id.send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.colour(0xf38ba8)
-                        .title(format!(":warning: Error leaving channel {:?}.", error))
-                        .description("Contact admin.")
-                        .timestamp(Timestamp::now())
-                })
-            }).await?;
+            msg.channel_id.say(&ctx.http, ":warning: Error leaving channel {:?}.");
         }
-
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.colour(0xf38ba8)
-                    .title("Left voice channel.")
-                    .timestamp(Timestamp::now())
-            })
-        }).await?;
     } else {
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.colour(0xf38ba8)
-                    .title(":warning: Not in the voice channel.")
-                    .timestamp(Timestamp::now())
-            })
-        }).await?;
+        msg.channel_id.say(&ctx.http, ":warning: Not in the voice channel.");
     }
 
     Ok(())
 }
 
-#[command]
-async fn use_spotify(ctx: &Context, msg: &Message) -> CommandResult {
-    !unimplemented!()
-}
+// #[command]
+// async fn use_spotify(ctx: &Context, msg: &Message) -> CommandResult {
+//     !unimplemented()
+// }
 
