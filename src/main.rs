@@ -1,39 +1,25 @@
-pub mod config;
-pub mod commands;
-pub mod hooks;
-pub mod utils;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
+
+use chrono::offset::Utc;
+use reqwest::Client as HttpClient;
+use serenity::{async_trait, builder, client::{Client, Context, EventHandler}, framework::standard::StandardFramework, model::gateway::Ready, prelude::*};
+use serenity::all::standard::Configuration;
+use serenity::http::Http;
+use serenity::model::id::ChannelId;
+use songbird::SerenityInit;
+
+use config::Config;
 
 use crate::commands::*;
 use crate::hooks::*;
 
-use chrono::offset::Utc;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-
-use reqwest::Client as HttpClient;
-
-use config::Config;
-use serenity::{
-    async_trait,
-    model::gateway::Ready,
-    prelude::*,
-    client::{Client, Context, EventHandler},
-    framework::standard::StandardFramework,
-};
-
-use serenity::http::Http;
-
-use serenity::model::id::{ChannelId, GuildId};
-use serenity::model::prelude::Activity;
-use songbird::SerenityInit;
-use rspotify::{
-    model::{AdditionalType, Country, Market, AlbumId},
-    prelude::*,
-    scopes, Credentials, OAuth, ClientCredsSpotify
-};
-use serenity::all::standard::Configuration;
+pub mod config;
+pub mod commands;
+pub mod hooks;
+pub mod utils;
 
 struct Handler {
     is_loop_running: AtomicBool,
@@ -75,8 +61,8 @@ impl EventHandler for Handler {
 //     let cpu_load = sys_info::loadavg().unwrap();
 //     let mem_usage = sys_info::mem_info().unwrap();
 //
-//     let message = ChannelId(1107344555159855115)
-//         .send_message(&ctx, |m| {
+//     let message = ChannelId::new(1107344555159855115)
+//         .send_message(&ctx, |m: builder::Builder| {
 //             m.embed(|e| {
 //                 e.title("System Resource Load")
 //                     .field("CPU Load Average", format!("{:.2}", cpu_load.one * 10.0), false)
@@ -109,21 +95,21 @@ async fn main() {
     let _ = Config::new().save();
     let config = Config::load().unwrap();
 
-    {
-        let creds = Credentials {
-            id: config.spotify_client_id().to_string(),
-            secret: Some(config.spotify_client_secret().to_string()),
-        };
-
-        let spotify = ClientCredsSpotify::new(creds);
-
-        spotify.request_token().await.unwrap();
-
-        let birdy_uri = AlbumId::from_uri("spotify:album:0sNOF9WDwhWunNAHPD3Baj").unwrap();
-        let albums = spotify.album(birdy_uri).await;
-
-        println!("Response: {albums:#?}");
-    }
+    // {
+    //     let creds = Credentials {
+    //         id: config.spotify_client_id().to_string(),
+    //         secret: Some(config.spotify_client_secret().to_string()),
+    //     };
+    //
+    //     let spotify = ClientCredsSpotify::new(creds);
+    //
+    //     spotify.request_token().await.unwrap();
+    //
+    //     let birdy_uri = AlbumId::from_uri("spotify:album:0sNOF9WDwhWunNAHPD3Baj").unwrap();
+    //     let albums = spotify.album(birdy_uri).await;
+    //
+    //     println!("Response: {albums:#?}");
+    // }
 
     let http = Http::new(&config.token());
 
@@ -137,7 +123,7 @@ async fn main() {
           }
           match http.get_current_user().await {
               Ok(bot_id) => (owners, bot_id.id),
-              Err(why) => panic!("Could not bot id: {:?}", why),
+              Err(why) => panic!("Could not get bot id: {:?}", why),
           }
       },
         Err(why) => panic!("Could not access application info: {:?}", why),

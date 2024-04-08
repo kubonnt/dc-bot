@@ -1,26 +1,22 @@
 use std::collections::HashSet;
 use std::fmt::Write;
-use std::path;
-
-use serenity::{model::{channel::Message}, prelude::*, client::{Context}, framework::standard::{
-    macros::{command, group, help, check},
-    CommandResult,
-}, async_trait};
-use songbird::events::{Event, EventHandler as VoiceEventHandler};
-use serenity::model::gateway::Ready;
-use serenity::framework::standard::{Args, CommandGroup, CommandOptions, help_commands, HelpOptions, Reason};
-use serenity::http::CacheHttp;
-use serenity::model::id::UserId;
-use serenity::model::{Permissions};
-use songbird::input::YoutubeDl;
-use path::Path;
-
-use crate::hooks::CommandCounter;
 
 use reqwest::Client;
-use serenity::all::{Builder, MessageBuilder};
+use serenity::{async_trait, client::Context, framework::standard::{
+    CommandResult,
+    macros::{check, command, group, help},
+}, model::channel::Message, prelude::*};
+use serenity::all::Builder;
+use serenity::framework::standard::{Args, CommandGroup, CommandOptions, help_commands, HelpOptions, Reason};
+use serenity::http::CacheHttp;
+use serenity::model::gateway::Ready;
+use serenity::model::id::UserId;
+use serenity::model::Permissions;
 use songbird::{EventContext, TrackEvent};
-use tokio::signal::windows::ctrl_break;
+use songbird::events::{Event, EventHandler as VoiceEventHandler};
+use songbird::input::YoutubeDl;
+
+use crate::hooks::CommandCounter;
 
 pub(crate) struct HttpKey;
 
@@ -64,7 +60,8 @@ struct Owner;
 // struct General;
 
 #[group]
-#[commands(join, leave, play, stop)]
+#[summary = "Commands for all users."]
+#[commands(ping, join, leave, play, stop, queue, reset_queue, about, am_i_admin, przepros)]
 struct General;
 
 #[help]
@@ -112,6 +109,13 @@ async fn owner_check(
     }
 
     Ok(())
+}
+
+async fn get_http_client(ctx: &Context) -> Client {
+    let data = ctx.data.read().await;
+    data.get::<HttpKey>()
+        .cloned()
+        .expect("Guaranteed to exist in typemap")
 }
 
 #[command]
@@ -234,8 +238,18 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         } else {
             YoutubeDl::new(http_client, url)
         };
+
         handler.stop();
-        let _ = handler.play_input(source.clone().into());
+        handler.queue().stop();
+        handler.enqueue_input(source.clone().into()).await;
+        //handler.play_input(source.clone().into());
+
+
+        msg.channel_id.say(&ctx.http,
+        format!("Playing the song, position in the queue: position {}", handler.queue().len())
+        ).await;
+
+        handler.queue().resume().expect("TODO: panic message");
     } else {
         msg.channel_id.say(&ctx.http, ":warning: Error sourcing ffmpeg.").await;
     }
@@ -254,9 +268,73 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
-        //let queue = handler.queue();
+        handler.queue().stop();
         handler.stop();
-        //queue.stop();
+
+        msg.channel_id.say(&ctx.http, "Playback stopped, queue cleared.").await;
+    } else {
+        msg.channel_id.say(&ctx.http, "Not in voice channel.").await;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn queue(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let url = match args.single::<String>() {
+        Ok(url) => url,
+        Err(_) => {
+            msg.channel_id.say(&ctx.http, "Must provide url for audio or video.")
+                .await;
+
+            return Ok(());
+        },
+    };
+
+    if !url.starts_with("http") {
+        msg.channel_id.say(&ctx.http, "Must provide a valid URL.").await;
+
+        return Ok(());
+    }
+
+    let guild_id = msg.guild_id.unwrap();
+
+    let http_client = get_http_client(ctx).await;
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let mut handler = handler_lock.lock().await;
+
+        let src = YoutubeDl::new(http_client, url);
+        handler.enqueue_input(src.into()).await;
+
+        msg.channel_id.say(&ctx.http,
+            format!("Added song to the queue: position {}", handler.queue().len())
+        ).await;
+    } else {
+        msg.channel_id.say(&ctx.http, "Not in a voice channel to play in").await;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn reset_queue(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    let guild_id = msg.guild_id.unwrap();
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        let queue = handler.queue();
+        queue.stop();
 
         msg.channel_id.say(&ctx.http, "Queue cleared.").await;
     } else {
@@ -315,10 +393,10 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 
     if has_handler {
         if let Err(error) = manager.remove(guild_id).await {
-            msg.channel_id.say(&ctx.http, ":warning: Error leaving channel {:?}.");
+            msg.channel_id.say(&ctx.http, ":warning: Error leaving channel {:?}.").await;
         }
     } else {
-        msg.channel_id.say(&ctx.http, ":warning: Not in the voice channel.");
+        msg.channel_id.say(&ctx.http, ":warning: Not in the voice channel.").await;
     }
 
     Ok(())
