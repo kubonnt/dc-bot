@@ -1,3 +1,4 @@
+use std::alloc::handle_alloc_error;
 use std::collections::HashSet;
 use std::fmt::Write;
 
@@ -14,7 +15,10 @@ use serenity::model::id::UserId;
 use serenity::model::Permissions;
 use songbird::{EventContext, TrackEvent};
 use songbird::events::{Event, EventHandler as VoiceEventHandler};
-use songbird::input::YoutubeDl;
+use songbird::input::{Compose, YoutubeDl};
+use songbird::typemap::IntoBox;
+//use youtube_dl::YoutubeDl;
+use tokio::signal::windows::ctrl_break;
 
 use crate::hooks::CommandCounter;
 
@@ -61,7 +65,7 @@ struct Owner;
 
 #[group]
 #[summary = "Commands for all users."]
-#[commands(ping, join, leave, play, stop, queue, reset_queue, about, am_i_admin, przepros)]
+#[commands(ping, join, leave, play, skip, stop, queue, reset_queue, about, am_i_admin, przepros)]
 struct General;
 
 #[help]
@@ -244,12 +248,11 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         handler.enqueue_input(source.clone().into()).await;
         //handler.play_input(source.clone().into());
 
-
         msg.channel_id.say(&ctx.http,
-        format!("Playing the song, position in the queue: position {}", handler.queue().len())
+        format!(/*Add a song title*/"Playing the song, position in the queue: position {}", handler.queue().len())
         ).await;
 
-        handler.queue().resume().expect("TODO: panic message");
+        handler.queue().resume().expect("Couldn't resume queue.");
     } else {
         msg.channel_id.say(&ctx.http, ":warning: Error sourcing ffmpeg.").await;
     }
@@ -274,6 +277,32 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
         msg.channel_id.say(&ctx.http, "Playback stopped, queue cleared.").await;
     } else {
         msg.channel_id.say(&ctx.http, "Not in voice channel.").await;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    let guild_id = msg.guild_id.unwrap();
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        let queue = handler.queue();
+        let _ = queue.skip();
+
+        if queue.len() < 1 {
+            msg.channel_id.say(&ctx.http, "No more songs in a queue.").await;
+        }
+        msg.channel_id.say(&ctx.http, format!("Playing: {:?}", handler.current_connection())).await;
+        msg.channel_id.say(&ctx.http, format!("Song skipped: {} left in the queue.", queue.len() - 1)).await;
+    } else {
+        msg.channel_id.say(&ctx.http, "Not in a voice channel to play in.").await;
     }
 
     Ok(())
@@ -313,7 +342,7 @@ async fn queue(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         handler.enqueue_input(src.into()).await;
 
         msg.channel_id.say(&ctx.http,
-            format!("Added song to the queue: position {}", handler.queue().len())
+            format!("Added song to the queue. Songs in the queue: {}", handler.queue().len())
         ).await;
     } else {
         msg.channel_id.say(&ctx.http, "Not in a voice channel to play in").await;

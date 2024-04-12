@@ -18,3 +18,4 @@ env_logger = "0.10.0"
 songbird = {version = "0.4.1", features = ["builtin-queue", "serenity"]}
 reqwest = "0.11.27"
 symphonia = { version = "0.5.2", features = ['pcm','mp3','wav','isomp4','aac','alac'] }
+youtube_dl = "0.9.0"
